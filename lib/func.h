@@ -24,6 +24,104 @@ void printMessage(struct message *msg);
 
 std::string makeMessage(struct message *msg);
 
+void decodeMessage(std::string message);
+
+void writeInfo(struct message *msg);
+
+void decodeMessage(std::string message)
+{
+
+    int totalSize = stoi(message.substr(0, 3));
+    int personSize = stoi(message.substr(3, 3));
+    int companySize = stoi(message.substr(6, 3));
+    int nameSize = stoi(message.substr(9, 2));
+    int ageSize = stoi(message.substr(11, 2));
+    int dniSize = stoi(message.substr(13, 2));
+    int adressSize = stoi(message.substr(15, 2));
+    int phoneSize = stoi(message.substr(17, 2));
+    int emailSize = stoi(message.substr(19, 2));
+    int jobSize = stoi(message.substr(21, 2));
+    int companynameSize = stoi(message.substr(23, 2));
+    int companyAdressSize = stoi(message.substr(25, 2));
+    int companyPhoneSize = stoi(message.substr(27, 2));
+    int companyEmailSize = stoi(message.substr(29, 2));
+    int companyWebSize = stoi(message.substr(31, 2));
+    std::string name = message.substr(33, nameSize);
+    std::string age = message.substr(33 + nameSize, ageSize);
+    std::string dni = message.substr(33 + nameSize + ageSize, dniSize);
+    std::string adress = message.substr(33 + nameSize + ageSize + dniSize, adressSize);
+    std::string phone = message.substr(33 + nameSize + ageSize + dniSize + adressSize, phoneSize);
+    std::string email = message.substr(33 + nameSize + ageSize + dniSize + adressSize + phoneSize, emailSize);
+    std::string job = message.substr(33 + nameSize + ageSize + dniSize + adressSize + phoneSize + emailSize, jobSize);
+    std::string companyname = message.substr(33 + nameSize + ageSize + dniSize + adressSize + phoneSize + emailSize + jobSize, companynameSize);
+    std::string companyAdress = message.substr(33 + nameSize + ageSize + dniSize + adressSize + phoneSize + emailSize + jobSize + companynameSize, companyAdressSize);
+    std::string companyPhone = message.substr(33 + nameSize + ageSize + dniSize + adressSize + phoneSize + emailSize + jobSize + companynameSize + companyAdressSize, companyPhoneSize);
+    std::string companyEmail = message.substr(33 + nameSize + ageSize + dniSize + adressSize + phoneSize + emailSize + jobSize + companynameSize + companyAdressSize + companyPhoneSize, companyEmailSize);
+    std::string companyWeb = message.substr(33 + nameSize + ageSize + dniSize + adressSize + phoneSize + emailSize + jobSize + companynameSize + companyAdressSize + companyPhoneSize + companyEmailSize, companyWebSize);
+    struct message msg;
+    msg.person.name = name;
+    msg.person.age = age;
+    msg.person.dni = dni;
+    msg.person.adress = adress;
+    msg.person.phone = phone;
+    msg.person.email = email;
+    msg.person.job = job;
+    msg.company.name = companyname;
+    msg.person.company = companyname;
+    msg.company.adress = companyAdress;
+    msg.company.phone = companyPhone;
+    msg.company.email = companyEmail;
+    msg.company.web = companyWeb;
+    writeInfo(&msg);
+    // printMessage(&msg);
+}
+
+void writeInfo(struct message *msg)
+{
+
+    std::string ruta = "/home/phantasma/ParallelProject/log/dataLog/";
+    if (msg->person.company == "google")
+    {
+        ruta += "google.data";
+    }
+    else if (msg->person.company == "facebook")
+    {
+        ruta += "facebook.data";
+    }
+    else if (msg->person.company == "microsoft")
+    {
+        ruta += "microsoft.data";
+    }
+    else if (msg->person.company == "apple")
+    {
+        ruta += "apple.data";
+    }
+
+    std::ofstream file(ruta, std::ios::app);
+    if (file.is_open())
+    {
+        file << std::endl;
+        file << "Nombre: " << msg->person.name << std::endl;
+        file << "Edad: " << msg->person.age << std::endl;
+        file << "DNI: " << msg->person.dni << std::endl;
+        file << "Direccion: " << msg->person.adress << std::endl;
+        file << "Telefono: " << msg->person.phone << std::endl;
+        file << "Email: " << msg->person.email << std::endl;
+        file << "Trabajo: " << msg->person.job << std::endl;
+        file << "Compañia: " << msg->person.company << std::endl;
+        file << "Direccion de la compañia: " << msg->company.adress << std::endl;
+        file << "Telefono de la compañia: " << msg->company.phone << std::endl;
+        file << "Email de la compañia: " << msg->company.email << std::endl;
+        file << "Pagina web de la compañia: " << msg->company.web << std::endl;
+        file << "-----------------------------------" << std::endl;
+        file.close();
+    }
+    else
+    {
+        std::cerr << "Failed to open file for writing." << std::endl;
+    }
+}
+
 void createMessageStruct(struct message *message){
     message->person.name = completeField(1);
     message->person.age = completeField(2);
@@ -169,7 +267,8 @@ void printMessage(struct message *msg){
     std::cout <<"\t"<< "Company email: " << msg->company.email << std::endl;
     std::cout <<"\t"<< "Company web: " << msg->company.web << std::endl;
     std::cout <<"\n\n\t"<< "Press enter to continue" << std::endl;
-
+    getchar();
+    getchar();
     }
 std::string makeMessage(struct message *msg){
     std::string aux;
