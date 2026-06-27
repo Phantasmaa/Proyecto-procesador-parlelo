@@ -1,0 +1,10 @@
+build/
+*.o
+*.a
+*.so
+.cache/
+compile_commands.json
+.vscode/
+.DS_Store
+*.log
+!log/info.log

@@ -1,30 +1,48 @@
+# syntax=docker/dockerfile:1.7
+# SPDX-License-Identifier: MIT
+# Two-stage build: the first stage compiles with a full toolchain, the
+# second stage ships only the binaries + runtime libs to keep the image lean.
+
+# ---------- Stage 1: builder ----------
+FROM ubuntu:22.04 AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        g++ \
+        cmake \
+        make \
+        libssl-dev \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+COPY CMakeLists.txt ./
+COPY lib/    ./lib/
+COPY data/   ./data/
+COPY src/    ./src/
+
+RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+    && cmake --build build -j"$(nproc)" \
+    && cmake --install build --prefix /out
+
+# ---------- Stage 2: runtime ----------
 FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
-
-RUN apt-get update && apt-get install -y \
-    g++ \
-    build-essential \
-    libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libssl3 \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --create-home --shell /bin/bash pp
 
 WORKDIR /app
+COPY --from=builder /out/bin/      ./bin/
+COPY --from=builder /out/share/    ./share/
 
-COPY src/ ./src/
-COPY lib/ ./lib/
-COPY data/ ./data/
-COPY log/ ./log/
+RUN mkdir -p /app/log/info.log /app/log/dataLog \
+    && chown -R pp:pp /app
 
-RUN mkdir -p bin log log/dataLog && \
-    g++ -o bin/sender src/sender.cpp \
-    -I lib -I data \
-    -lssl -lcrypto -lpthread && \
-    g++ -o bin/receiver src/receiver.cpp \
-    -I lib -I data \
-    -lssl -lcrypto -lpthread && \
-    chmod +x src/com.sh && chmod 777 log
+USER pp
 
-# Compile once at build time, run the binary at runtime
-RUN chmod +x src/com.sh
-
+# Default entrypoint is the bash shell so the operator can pick the binary.
 CMD ["/bin/bash"]

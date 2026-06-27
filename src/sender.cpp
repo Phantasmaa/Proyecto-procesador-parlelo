@@ -1,180 +1,109 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <iostream>
-#include <inc.h>
-#include <data.h>
-#include <cstdlib>
-#include <ctime>
-#include <func.h>
-#include <coder.h>
-#include <queue>
-#include <sys/ipc.h>
-#include <sys/msg.h>
-#include <thread>
-#include <mutex>
+// SPDX-License-Identifier: MIT
+// Producer: generates random messages and pushes them into the IPC queue
+// either as a fixed batch (--count N) or continuously (--infinite).
+// Multiple producer threads can run concurrently to demonstrate fan-out.
 #include <atomic>
+#include <chrono>
+#include <cstdlib>
+#include <iostream>
+#include <string>
+#include <thread>
+#include <vector>
 
-#define MSG_KEY 1234
+#include "func.h"
+#include "ipc.h"
+#include "coder.h"
+#include "inc.h"
 
-#define MAX_MESSAGE_SIZE 1024
+namespace {
 
+constexpr int kBatchSize = 20000;
 
-struct message_buffer
-{
-    long message_type;
-    char message_text[MAX_MESSAGE_SIZE];
-};
+void runProducer(pp::ipc::Queue& queue, std::atomic<bool>& keepRunning) {
+    while (keepRunning.load()) {
+        pp::model::Message m = pp::msg::createRandomMessage();
+        const std::string wire = pp::msg::encode(m);
+        try {
+            queue.send(pp::codec::base64_encode(wire));
+        } catch (const std::exception& e) {
+            std::cerr << "[sender] " << e.what() << '\n';
+        }
+    }
+}
 
-std::mutex mtx;
+void runBurst(pp::ipc::Queue& queue, int count) {
+    for (int i = 0; i < count; ++i) {
+        pp::model::Message m = pp::msg::createRandomMessage();
+        const std::string wire = pp::msg::encode(m);
+        queue.send(pp::codec::base64_encode(wire));
+    }
+}
 
-void mainMnu(struct message *msg);
-void lanzarMsg(struct message *msg);
-void lanzarMsgg(struct message *msg);
+void printUsage(const char* argv0) {
+    std::cout <<
+        "Usage: " << argv0 << " [options]\n"
+        "  --count N        send N messages from 5 producer threads (default: " << kBatchSize << ")\n"
+        "  --infinite       send messages forever (Ctrl-C to stop)\n"
+        "  --demo           show one decoded message and exit\n"
+        "  --help           show this help\n";
+}
 
-int main()
-{
-    std::srand(static_cast<unsigned int>(std::time(nullptr)));
-    struct message msg;
-    mainMnu(&msg);
+}  // namespace
 
+int main(int argc, char** argv) {
+    bool infinite = false;
+    bool demo     = false;
+    int  count    = kBatchSize;
+
+    for (int i = 1; i < argc; ++i) {
+        const std::string a = argv[i];
+        if (a == "--count" && i + 1 < argc)      count = std::atoi(argv[++i]);
+        else if (a == "--infinite")              infinite = true;
+        else if (a == "--demo")                  demo = true;
+        else if (a == "--help" || a == "-h")     { printUsage(argv[0]); return 0; }
+        else {
+            std::cerr << "Unknown option: " << a << "\n";
+            printUsage(argv[0]);
+            return 2;
+        }
+    }
+
+    if (demo) {
+        const auto m = pp::msg::createRandomMessage();
+        pp::msg::printMessage(m);
+        return 0;
+    }
+
+    pp::ipc::Queue queue;
+    try {
+        queue.open(/*create=*/true);
+    } catch (const std::exception& e) {
+        std::cerr << "[sender] " << e.what() << '\n';
+        return 1;
+    }
+
+    pp::msg::writeLog("Sender started");
+    std::cout << "Sender online. IPC queue id=" << queue.id() << '\n';
+
+    if (infinite) {
+        std::atomic<bool> keepRunning{true};
+        std::vector<std::thread> producers;
+        for (int t = 0; t < 5; ++t) {
+            producers.emplace_back(runProducer, std::ref(queue), std::ref(keepRunning));
+        }
+        std::cout << "Streaming 5 producers. Press Enter to stop...\n";
+        std::cin.get();
+        keepRunning.store(false);
+        for (auto& th : producers) th.join();
+    } else {
+        std::cout << "Bursting " << count << " messages from 5 producer threads...\n";
+        std::vector<std::thread> producers;
+        for (int t = 0; t < 5; ++t) {
+            producers.emplace_back(runBurst, std::ref(queue), count);
+        }
+        for (auto& th : producers) th.join();
+    }
+
+    pp::msg::writeLog("Sender stopped");
     return 0;
-}
-
-void lanzarMsg(struct message *msg)
-{
-
-    int msgid = msgget(MSG_KEY, IPC_CREAT | 0666);
-    if (msgid == -1)
-    {
-        perror("msgget");
-        exit(1);
-    }
-
-    struct message_buffer message;
-
-    mtx.lock(); // Lock the control
-    writeLog("Lanzando 20000 mensaje");
-    for (int i = 0; i < 20000; i++)
-    {
-
-        createMessageStruct(msg);
-        std::string message_text = makeMessage(msg);
-        message_text = base64_encode(message_text);
-
-        message.message_type = 1;
-        strncpy(message.message_text, message_text.c_str(), sizeof(message.message_text) - 1);
-
-        if (msgsnd(msgid, &message, sizeof(message), 0) == -1)
-        {
-            perror("msgsnd");
-            exit(1);
-        }
-
-        message_text.clear();
-        memset(&message, 0, sizeof(message));
-    }
-    mtx.unlock();
-}
-void lanzarMsgg(struct message *msg)
-{
-
-    int msgid = msgget(MSG_KEY, IPC_CREAT | 0666);
-    if (msgid == -1)
-    {
-        perror("msgget");
-        exit(1);
-    }
-
-    struct message_buffer message;
-
-    mtx.lock(); // Lock the control
-    writeLog("Lanzando mensajes indefinidos");
-    for (;;)
-    {
-
-        createMessageStruct(msg);
-        std::string message_text = makeMessage(msg);
-        message_text = base64_encode(message_text);
-
-        message.message_type = 1;
-        strncpy(message.message_text, message_text.c_str(), sizeof(message.message_text) - 1);
-
-        if (msgsnd(msgid, &message, sizeof(message), 0) == -1)
-        {
-            perror("msgsnd");
-            exit(1);
-        }
-
-        message_text.clear();
-        memset(&message, 0, sizeof(message));
-    }
-    mtx.unlock();
-}
-
-
-void mainMnu(struct message *msg)
-{
-    std::string message = makeMessage(msg);
-    message = base64_encode(message);
-
-    int expression = 0;
-    while (expression != 4)
-    {
-        system("clear");
-        printf("\033c");
-        printf("\n\n\t\tMenu del proceso lanzador\n\n");
-        printf("\t1.- Ver contenido ejemplo de mensaje\n");
-        printf("\t2.- Lanzar mensajes en paralelo\n");
-        printf("\t3.- Lanzar mensajes indefinidamente\n");
-        printf("\t4.- Salir\n");
-        printf("\tOpcion: ");
-        scanf("%d", &expression);
-        std::thread t;
-        std::thread t2;
-        std::thread t3;
-        std::thread t4;
-        std::thread t5;
-        switch (expression)
-        {
-        case 1:
-            createMessageStruct(msg);
-            printMessage(msg);
-            break;
-        case 2:
-            // Lanzar contenido
-            writeLog("Lanzando mensaje");
-            t = std::thread(lanzarMsg, msg);
-            t2 = std::thread(lanzarMsg, msg);
-            t3 = std::thread(lanzarMsg, msg);
-            t4 = std::thread(lanzarMsg, msg);
-            t5 = std::thread(lanzarMsg, msg);
-            t.join();
-            t2.join();
-            t3.join();
-            t4.join();
-            t5.join();
-            break;
-        case 3:
-            writeLog("Lanzando mensaje");
-            t = std::thread(lanzarMsgg, msg);
-            t2 = std::thread(lanzarMsgg, msg);
-            t3 = std::thread(lanzarMsgg, msg);
-            t4 = std::thread(lanzarMsgg, msg);
-            t5 = std::thread(lanzarMsgg, msg);
-            t.join();
-            t2.join();
-            t3.join();
-            t4.join();
-            t5.join();
-            break;
-        case 4:
-            break;
-        default:
-            printf("\n\tOpcion no valida");
-            getchar();
-            getchar();
-            break;
-        }
-    }
 }

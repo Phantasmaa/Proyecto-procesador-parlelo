@@ -1,0 +1,7 @@
+.git
+.gitattributes
+build/
+build.sh
+.vscode/
+*.log
+!log/info.log
