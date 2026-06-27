@@ -79,7 +79,7 @@ void decodeMessage(std::string message)
 void writeInfo(struct message *msg)
 {
 
-    std::string ruta = "/home/phantasma/ParallelProject/log/dataLog/";
+    std::string ruta="/app/log/dataLog/";
     if (msg->person.company == "google")
     {
         ruta += "google.data";
@@ -281,7 +281,7 @@ void writeLog(const std::string& message) {
     std::string timestamp = std::asctime(std::localtime(&now));
     timestamp.pop_back(); // Remove newline character
 
-    std::ofstream file("/home/phantasma/ParallelProject/log/info.log", std::ios::app);
+    std::ofstream file("/app/log/info.log", std::ios::app);
     if (file.is_open()) {
         file << timestamp << " - " << message << std::endl;
         file.close();
